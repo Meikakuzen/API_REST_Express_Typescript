@@ -284,8 +284,165 @@ export const addentry =()=> null
 
 > "resolveJsonModule": true,
 
+- Ya no hay error
+- Si me coloco con el cursor encima de getEntries el editor me dice que devuelve un objeto con id:number, date:string, etc (los tipos del objeto JSON)
+- Quiero que weather y visibility sean unos strings concretos: good, bad, rainy, etc
+- Para eso están los tipos
+- En src creo el archivo types.d.ts
+    - Typescript busca este fichero por defecto. Es donde estarán todos los tipos
+    - Se pueden importar más de otros ficheros
+- types.d.ts
+
+~~~js
+export type Weather = 'sunny' | 'rainy' | 'cloudy' | 'windy' | 'stormy'
+
+export type Visibility = 'great' | 'good' | 'ok' | 'poor'
+~~~
+
+- Ahora crearé la interfaz ( que son extensibles con extends, aunque los tipos también )
+    - Son como contratos de lo que debe contener un objeto
+
+~~~js
+export interface DiaryEntry{
+    id: number,
+    date: string,
+    weather: Weather,
+    visibility: Visibility,
+    comment: string
+}
+~~~
+
+- Si quisiera extender la interface sería:
+
+~~~js
+interface SpecialDiaryEntry extends DiaryEntry{
+    flightNumber: number
+}
+~~~
+
+- Si quisiera extender un type podría hacerlo así
+
+~~~js
+type SpecialDiaryEntry2  = DiaryEntry &{
+    flightNUmber: number
+}
+~~~
+
+## Se recomienda si es algo estático usar un tipo y si es algo que se puede extender usar las interfaces
+
+- Creo una variable del tipo array de la interfaz DiaryEntry en el controller
+
+~~~js
+const diaries : DiaryEntry[] = diaryData 
+~~~
+
+- Esto me marca un error: 'El tipo string no se puede asignar al tipo Weather'
+
+        NOTA: se recomienda leer los errores de abajo a arriba
+
+- Yo le estoy diciendo que es de tipo Weather y Typescript dice que no
+- Para arreglarlo se usa **la aserción de tipos**
+- Ahora ya puedo decir que el getEntries devuelve un array de DiaryEntry
+
+~~~js
+import diaryData from '../db/diaries.json'
+import { DiaryEntry } from '../types'
 
 
+const diaries : DiaryEntry[] = diaryData as DiaryEntry[] //aserción de tipos
+
+export const getEntries = (): DiaryEntry[]=>  diaries
+
+export const addentry =(): undefined=> undefined
+~~~
+
+- Hay que evitar usar la aserción de tipos siempre que sea necesario. Un caso típico de aserción de tipos es en un fetch
+- También hay que evitar nombrar los archivos igual. Typescript sigue una jerarquía/orden de prioridad
+
+> .tsx, .ts, .node, .js, .json
+
+- En typescript no es obligatorio poner las extensiones, por lo que hay que vigilar con esto
+-----
+- Se puede usar ts-standard como formateador/corrector de código que usa ESLint por debajo 
+- Y Crear el script
+
+> "ts": "ts-standard",
+
+- Y debajo de dependencias (por fuera):
+    - Hay que indicarle el archivo de configuración de ts
+
+~~~js
+"esLintConfig":{
+    "parserOptions":{
+        "project": "./tsconfig.json"
+    },
+    "extends": ["./node_modules/ts-standard/eslintrc.json"]
+}
+~~~
+
+- Reiniciar VSCode
+- Hay una cosa en ts llamada los tipos de utilidad (hay muchos disponibles)
+- Pongamos que quiero recibir las entradas en un GET pero sin los comentarios
+
+~~~js
+export const getEntriesWithoutComments = (): withoutCommentsDiaryEntry[]=> diaries 
+~~~
+
+- Ahora en types.d.ts uso el Pick con las propiedades que si me interesan
+
+~~~js
+export type withoutCommentsDiaryEntry = Pick<DiaryEntry, 'id'| 'date' | 'weather'| 'visibility'>
+~~~
+
+- En lugar de Pick puedo usar el Omit para omitir uno en concreto
+
+~~~js
+export type withoutCommentsDiaryEntry = Omit<DiaryEntry, 'comment'>
+~~~
+
+- Es mejor crear el minimo de objetos y aprovechar lo que ya hay
+-----
+
+- Importo todo del diaries.controller.ts en el diaries.routes
+
+> import * as diaryServices from '../controllers/diaries.controllers'
+
+- Lo uso en la petición GET
+
+~~~js
+import express from 'express'
+import * as diaryServices from '../controllers/diaries.controllers'
+
+const router = express.Router()
+
+router.get('/', (_,res)=>{
+    res.send(diaryServices.getEntriesWithoutComments())
+})
+
+router.post('/', (_, res)=>{
+    res.send('Saving a diary')
+})
+
+export default router
+~~~
+
+- El resultado es el JSON pero con los comentarios.
+- Con el res.send typescript no es capaz de filtrarlo
+- Hay que utilizar un map
+
+~~~js
+export const getEntriesWithoutComments = (): withoutCommentsDiaryEntry[]=> {
+    return diaries.map(({id, date,weather, visibility})=>{
+        return {
+            id,
+            date,
+            weather,
+            visibility
+        }
+    })
+}
+~~~
+- Entonces, me serviría para el tipado (si pongo DiaryServices.comment no me va a dejar), pero hay que hacerlo a mano
 
 
 
