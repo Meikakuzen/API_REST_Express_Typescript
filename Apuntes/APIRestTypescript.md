@@ -444,6 +444,11 @@ export const getEntriesWithoutComments = (): withoutCommentsDiaryEntry[]=> {
 ~~~
 - Entonces, me serviría para el tipado (si pongo DiaryServices.comment no me va a dejar), pero hay que hacerlo a mano
 
+----
+# Los undefined
+
+
+
 
 
 
