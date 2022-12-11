@@ -447,6 +447,440 @@ export const getEntriesWithoutComments = (): withoutCommentsDiaryEntry[]=> {
 ----
 # Los undefined
 
+- Creo una función findById en diaries.controller con un id que es un número y va a devolver un Diaryentry (sólo uno)
+- Voy a buscar un id en el array
+
+~~~js
+export const findById = (id:number): DiaryEntry=>{
+    const entry = diaries.find(d => d.id === id)
+    return entry //error
+}
+~~~
+
+- Esto da error porque dice que no se puede asignar undefined. Gracias Typescript. Se soluciona fácil
+
+~~~js
+export const findById = (id:number): DiaryEntry | undefined=>{
+    const entry = diaries.find(d => d.id === id)
+    return entry
+}
+~~~
+
+- Esto significa que va a haber que controlar siempre con un if que me puede devolver un undefined
+    - Antes de acceder a ninguna propiedad del entry
+- Creo una nueva ruta con id en diaries.routes
+- Parseo el id a number con  +  porque cuando se extraen los parametros se extraen como string. Typescript me lo señala 
+    - Se puede hacer también con Number(id)
+~~~js
+router.get('/:id', (req,res)=>{
+
+    const {id} = req.params
+    const diary = diaryServices.findById(+id)
+    
+    res.json({diary})
+})
+~~~
+
+- Si voy a esta ruta con el id 1 me devuelve el resultado en el navegador
+
+> http://localhost:3000/api/diaries/1
+
+- Si ahora yo pongo diary.ALGO automáticamente me pone diary?.ALGO, con la interrogación, porque puede ser undefined
+- Como puede devolver undefined uso un ternario
+
+~~~js
+
+router.get('/:id', (req,res)=>{
+
+    const {id} = req.params
+    const entry = diaryServices.findById(+id)
+
+    return (entry != null)
+    ? res.send(entry)
+    : res.sendStatus(404)
+})
+~~~
+
+- Sigue devolviendo el comentario
+- Puedo usar desestructuración en el findById. Debo cambiar el tipo de dato 
+- Debo devolver un segundo return de la funcion porque está marcado el el tsconfig.json que es obligatorio que devuelva algo ( se puede desactivar )
+
+~~~js
+export const findById = (id:number): withoutCommentsDiaryEntry | undefined=>{
+    const entry = diaries.find(d => d.id === id)
+    if(entry != null){
+        const {comment, ...restOfEntry} = entry
+        return restOfEntry
+    }
+    return undefined
+}
+~~~
+------
+
+# POST
+
+- Le digo de recibir del req.body todo menos la id, porque la voy a generar yo
+- Creo una nueva entrada en el diario
+
+~~~js
+router.post('/', (req, res)=>{
+    const {date, weather, visibility, comment} = req.body
+
+    const newDiaryEntry = diaryServices.addDiary(
+        date,
+        weather,
+        visibility,
+        comment
+    )
+
+    res.json(newDiaryEntry)
+})
+~~~
+
+- Falta el código de addDiary!
+- Para la id se puede hacer así
+
+~~~js
+export const addDiary =(date: string, weather: Weather, visibility: Visibility, comments: string)=>{
+    const newDiaryEntry ={
+        id: diaries.length+1,        
+    }
+} 
+~~~
+
+- O se puede hacer así. (La id más alta + 1). Preferible
+
+~~~js
+export const addDiary =(date: string, weather: Weather, visibility: Visibility, comments: string)=>{
+    const newDiaryEntry ={
+        id: Math.max(...diaries.map(d => d.id)) +1,
+    }
+} 
+~~~
+
+~~~js
+export const addDiary =(date: string, weather: Weather, visibility: Visibility, comment: string)=>{
+    const newDiaryEntry ={
+        id: Math.max(...diaries.map(d => d.id)) +1,
+        date,
+        weather,
+        visibility, 
+        comment
+    }
+
+    diaries.push(newDiaryEntry)
+
+    return newDiaryEntry
+} 
+~~~
+
+- En lugar de pasarle todas las propiedades en el .routes le pasaré un objeto
+
+~~~js
+router.post('/', (req, res)=>{
+    const {date, weather, visibility, comment} = req.body
+
+    const newDiaryEntry = diaryServices.addDiary({
+        date,
+        weather,
+        visibility,
+        comment
+    })
+
+    res.json(newDiaryEntry)
+})
+~~~
+
+- En addDiary le paso este objeto tipado en lugar de todos los parámetros
+
+~~~js
+export const addDiary =(newDiaryEntry)=>{
+    const newDiary ={
+        id: Math.max(...diaries.map(d => d.id)) +1,
+        ...newDiaryEntry
+    }
+
+    diaries.push(newDiary)
+
+    return newDiary
+} 
+~~~
+
+- Ahora voy a los tipos. Si me fijo es exactamente igual a la interfaz DiaryEntry menos una id
+
+~~~js
+export type newDiaryEntry = Omit<DiaryEntry, 'id'> 
+~~~
+
+- En el controller queda tal que así (importando newDiaryEntry) 
+
+~~~js
+export const addDiary =(newDiaryEntry: newDiaryEntry): DiaryEntry=>{
+    
+    const newDiary ={
+        id: Math.max(...diaries.map(d => d.id)) +1,
+        ...newDiaryEntry
+    }
+
+    diaries.push(newDiary)
+
+    return newDiary
+} 
+~~~
+
+- Intentar siempre mover objetos que tengan un contrato. Reutilizar
+- Todo ha ido bien, pero faltan validaciones
+- Por ejemplo, los tipos de las propiedades en addDiary son todos :any
+- Si al date le paso true, en weather le pongo 'kikos' (en el req.body) lo anota igual
+
+## Typescript es más cómo un Linter. No tiene en cuenta lo que añade el usuario
+
+- Uso un try catch en el .routes
+- Voy a crear el newDiaryEntry en otro sitio. Lo renombro a addedDiaryEntry
+
+~~~js
+router.post('/', (req, res)=>{
+
+    try {
+        const {date, weather, visibility, comment} = req.body
+    
+        const addedDiaryEntry = diaryServices.addDiary({
+            date,
+            weather,
+            visibility,
+            comment
+        })
+    
+        res.json(newDiaryEntry)
+        
+    } catch (error) {
+        res.status(400).send(error.message)
+    }
+})
+~~~
+
+- Creo antes el newDiaryEntry y lo paso a addDiary
+- Dónde va a ocurrir toda la magia es en la función toNeewDiaryEntry()
+
+~~~js
+router.post('/', (req, res)=>{
+
+    try {
+
+        const newDiaryEntry = toNewDiaryEntry(req.body)
+    
+        const addedDiaryEntry = diaryServices.addDiary(newDiaryEntry)
+    
+        res.json(addedDiaryEntry)
+        
+    } catch (error) {
+        res.status(400).send(error.message)
+    }
+})
+~~~
+
+- Creo en src el archivo utils.ts
+- Importo newDiaryEntry
+- Parseo el comment
+
+
+~~~js
+import { newDiaryEntry } from "./types";
+
+
+const parseComment = (commentFromRequest: any): string=>{
+    if(typeof commentFromRequest != 'string'){
+        throw new Error('Incorrect or missing comment')
+    }
+
+    return commentFromRequest
+}
+
+export const toNewDiaryEntry =(object: any): newDiaryEntry=>{
+    const newEntry: newDiaryEntry ={
+        comment:parseComment(object.comment)
+    } 
+
+    return newEntry
+}
+
+
+
+export default toNewDiaryEntry
+~~~
+
+- Creo una validación de string
+- Añadir la opción de insteanceof es por la otra forma de crear strings con new String (opcional, algunas librerías lo usan)
+
+~~~js
+const isString = (string: string) : boolean=>{
+    return typeof string === 'string' || string instanceof String
+}
+~~~
+
+- Creo una validación de fecha
+- La parseo también ( la trato como un string, se podría tratar como un Date )
+
+~~~js
+const parseDate= (dateFromRequest: any):string =>{
+    if(!isString(dateFromRequest) || !isDate(dateFromRequest)){
+        throw new Error ('Incorrect or missing date')
+    }
+     return dateFromRequest
+}
+
+const isDate = (date: string):boolean=>{
+
+    return Boolean(Date.parse(date))
+}
+~~~
+
+- Ahora le toca al Weather
+- Yo podría chequear manualmente si el string se incluye en alguna palabra de tipo weather pero esta no es la forma
+
+~~~js
+const isWeather = (string: string): boolean=>{
+    return ['sunny','rainy','cloudy','windy','stormy'].includes(string)
+}
+
+const parseWeather = (weatherFromRequest: any): Weather=>{
+    if(!isString(weatherFromRequest) || isWeather(weatherFromRequest)){
+        throw new Error ('Incorrect or missing weather')
+    }
+    return weatherFromRequest
+}
+~~~
+
+- Para ello existe un tipo de dato llamado enum
+    - Crea un objeto y cada uno de los keys tiene un valor
+- Voy a types
+
+~~~js
+
+export enum Weather{
+    Sunny= 'sunny',
+    Rainy= 'rainy',
+    Cloudy= 'cloudy',
+    Windy= 'windy',
+    Stormy='stormy'
+}
+~~~
+- Borro el type Weather, me quedo con el enum
+- Esta estructura de datos también la voy a tener disponible en runtime
+    - Cuando ts compile, ts me va a dar un objeto donde acceder a esta info
+
+~~~js
+const isWeather = (param: any): boolean=>{
+    return Object.values(Weather).includes(param)
+}
+~~~
+
+- Debo cambiar el parámetro a any, no puedo saber que el parámetro sea un string
+- De todos los valores que tengo en Weather que uno se incluya igual que el parámetro
+- Hago lo mismo con Visibility ( en types.ts )
+
+~~~js
+export enum Visibility{
+    Great= 'great',
+    Good= 'good',
+    Ok= ' ok',
+    Poor= 'poor'
+}
+~~~
+
+- Borro el otro Visibility
+- Ahora puedo usar Weather.Sunny, por ejemplo o Visibility.Ok
+- El archivo utils queda así
+
+~~~js
+import { newDiaryEntry, Weather, Visibility } from "./types";
+
+
+const parseComment = (commentFromRequest: any): string=>{
+    if(typeof commentFromRequest != 'string'){
+        throw new Error('Incorrect or missing comment')
+    }
+
+    return commentFromRequest
+}
+
+const isString = (string: string) : boolean=>{
+    return typeof string === 'string'
+}
+
+const parseDate= (dateFromRequest: any):string =>{
+    if(!isString(dateFromRequest) || !isDate(dateFromRequest)){
+        throw new Error ('Incorrect or missing date')
+    }
+
+    return dateFromRequest
+}
+
+const isDate = (date: string):boolean=>{
+
+    return Boolean(Date.parse(date))
+}
+
+const isWeather = (param: any): boolean=>{
+    return Object.values(Weather).includes(param)
+}
+
+const parseWeather = (weatherFromRequest: any): Weather=>{
+    if(!isString(weatherFromRequest) || !isWeather(weatherFromRequest)){
+        throw new Error ('Incorrect or missing weather')
+    }
+    return weatherFromRequest
+}
+
+const isVisibility = (param:any): boolean=>{
+    return Object.values(Visibility).includes(param)
+}
+
+const parseVisibility = (visibilityFromRequest: any): Visibility=>{
+    if(!isString(visibilityFromRequest) || !isVisibility(visibilityFromRequest)){
+        throw new Error ('Incorrect or missing visibility')
+    }
+    return visibilityFromRequest
+
+}
+
+export const toNewDiaryEntry =(object: any): newDiaryEntry=>{
+    const newEntry: newDiaryEntry ={
+        comment:parseComment(object.comment),
+        date: parseDate(object.date),
+        weather: parseWeather(object.weather),
+        visibility: parseVisibility(object.visibility)
+
+    } 
+
+    return newEntry
+}
+
+
+
+export default toNewDiaryEntry
+~~~
+
+- En .router queda así
+
+~~~js
+router.post('/', (req, res)=>{
+
+    try {
+        const newDiaryEntry: newDiaryEntry = toNewDiaryEntry(req.body)
+    
+        const addedDiaryEntry = diaryServices.addDiary(newDiaryEntry)
+    
+        res.json(addedDiaryEntry)
+        
+    } catch (error: any) {
+        res.status(400).send(error.message)
+    }
+})
+~~~
+
+
+
 
 
 
